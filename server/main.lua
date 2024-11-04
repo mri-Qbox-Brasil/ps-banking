@@ -456,3 +456,59 @@ exports("createBill", createBill)
         amount = 150.00,
     })
 ]]
+
+-- Society Compat MRI
+local function AddMoney(accountName, amount, reason)
+    local account = MySQL.query.await('SELECT * FROM ps_banking_accounts WHERE holder = ?', { accountName })
+    if #account > 0 then
+        MySQL.update.await('UPDATE ps_banking_accounts SET balance = balance + ? WHERE holder = ?', { amount, accountName })
+        logTransaction(getPlayerIdentifier(account[1].owner), reason, accountName, amount, true)
+        return true
+    end
+    return false
+end
+exports('AddMoney', AddMoney)
+
+local function RemoveMoney(accountName, amount, reason)
+    local account = MySQL.query.await('SELECT * FROM ps_banking_accounts WHERE holder = ?', { accountName })
+    if #account > 0 and account[1].balance >= amount then
+        MySQL.update.await('UPDATE ps_banking_accounts SET balance = balance - ? WHERE holder = ?', { amount, accountName })
+        logTransaction(getPlayerIdentifier(account[1].owner), reason, accountName, amount, false)
+        return true
+    end
+    return false
+end
+exports('RemoveMoney', RemoveMoney)
+
+local function CreatePlayerAccount(playerId, accountName, accountBalance, accountUsers)
+    local xPlayer = getPlayerFromId(playerId)
+    if not xPlayer then return false end
+
+    MySQL.insert.await('INSERT INTO ps_banking_accounts (balance, holder, cardNumber, users, owner) VALUES (?, ?, ?, ?, ?)', {
+        accountBalance, accountName, nil, json.encode(accountUsers), getPlayerIdentifier(xPlayer)
+    })
+
+    return true
+end
+exports('CreatePlayerAccount', CreatePlayerAccount)
+
+local function GetAccount(accountName)
+    local account = MySQL.query.await('SELECT * FROM ps_banking_accounts WHERE holder = ?', { accountName })
+    return account[1] or nil
+end
+exports('GetAccount', GetAccount)
+
+local function GetAccountBalance(accountName)
+    local account = GetAccount(accountName)
+    return account and account.balance or 0
+end
+exports('GetAccountBalance', GetAccountBalance)
+
+local function CreateBankStatement(playerId, account, amount, reason, statementType, accountType)
+    local xPlayer = getPlayerFromId(playerId)
+    if not xPlayer then return false end
+
+    logTransaction(getPlayerIdentifier(xPlayer), reason, account, amount, statementType == 'deposit')
+    return true
+end
+exports('CreateBankStatement', CreateBankStatement)

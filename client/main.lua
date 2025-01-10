@@ -361,3 +361,14 @@ RegisterNUICallback("ps-banking:client:getAmountPresets", function(_, cb)
         grid = Config.PresetATM_Amounts.Grid,
     }))
 end)
+
+AddEventHandler('onResourceStart', function(resource)
+   if not resource == GetCurrentResourceName() then return end
+
+   local success = lib.callback.await("ps-banking:server:createSocietyAccount", false)
+   if not success then
+       print("Failed to create society account")
+   else
+       print("Society account created")
+   end
+end)

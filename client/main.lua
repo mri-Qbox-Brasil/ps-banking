@@ -372,3 +372,26 @@ AddEventHandler('onResourceStart', function(resource)
        print("Society account created")
    end
 end)
+
+RegisterNetEvent(
+    "QBCore:Client:OnPlayerLoaded",
+    function()
+        local PlayerData = QBCore.Functions.GetPlayerData()
+        lib.callback.await("ps-banking:server:playerGroupInfo", false, PlayerData.job, true)
+        lib.callback.await("ps-banking:server:playerGroupInfo", false, PlayerData.gang, false)
+    end
+)
+
+RegisterNetEvent(
+    "QBCore:Client:OnJobUpdate",
+    function(data)
+        lib.callback.await("ps-banking:server:playerGroupInfo", false, data, true)
+    end
+)
+
+RegisterNetEvent(
+    "QBCore:Client:OnGangUpdate",
+    function(data)
+        lib.callback.await("ps-banking:server:playerGroupInfo", false, data, false)
+    end
+)

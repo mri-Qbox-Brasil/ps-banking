@@ -45,6 +45,157 @@ local function getName(player)
 	end
 end
 
+local function logTransaction(identifier, description, accountName, amount, isIncome)
+	MySQL.insert.await(
+		"INSERT INTO ps_banking_transactions (identifier, description, type, amount, date, isIncome) VALUES (?, ?, ?, ?, NOW(), ?)",
+		{ identifier, description, accountName, amount, isIncome }
+	)
+end
+
+-- Society Compat MRI
+
+local PlayerJob = nil
+local PlayerGang = nil
+
+local function generateCardNumber()
+    local rawNumber = tostring(math.random(1e15, 9e15))
+    local formattedNumber = rawNumber:gsub("(%d%d%d%d)", "%1 "):sub(1, -2)
+    return formattedNumber
+end
+
+local function validateGroup(group)
+	local JOBS = exports.qbx_core:GetJobs()
+	local GANGS = exports.qbx_core:GetGangs()
+	if JOBS[group] or GANGS[group] then
+		return false
+	end
+	return true
+end
+
+local function addMoney(accountName, amount, reason)
+	local account = MySQL.query.await("SELECT * FROM ps_banking_accounts WHERE holder = ?", { accountName })
+	if #account > 0 then
+		MySQL.update.await(
+			"UPDATE ps_banking_accounts SET balance = balance + ? WHERE holder = ?",
+			{ amount, accountName }
+		)
+		logTransaction(getPlayerIdentifier(account[1].owner), reason, accountName, amount, true)
+		return true
+	end
+	return false
+end
+exports("AddMoney", addMoney)
+
+local function removeMoney(accountName, amount, reason)
+	local account = MySQL.query.await("SELECT * FROM ps_banking_accounts WHERE holder = ?", { accountName })
+	if #account > 0 and account[1].balance >= amount then
+		MySQL.update.await(
+			"UPDATE ps_banking_accounts SET balance = balance - ? WHERE holder = ?",
+			{ amount, accountName }
+		)
+		logTransaction(getPlayerIdentifier(account[1].owner), reason, accountName, amount, false)
+		return true
+	end
+	return false
+end
+exports("RemoveMoney", removeMoney)
+
+local function createPlayerAccount(playerId, accountName, accountBalance, accountUsers)
+    local xPlayer = getPlayerFromId(playerId)
+
+    if not xPlayer then
+        return false
+    end
+
+    local cardNumber = generateCardNumber()
+
+    local ownerData = {
+        name = getName(xPlayer),
+        state = true,
+        identifier = getPlayerIdentifier(xPlayer)
+    }
+
+    MySQL.insert.await(
+        "INSERT INTO ps_banking_accounts (balance, holder, cardNumber, users, owner) VALUES (?, ?, ?, ?, ?)",
+        {
+            accountBalance,
+            accountName,
+            cardNumber,
+            json.encode(accountUsers),
+            json.encode(ownerData)
+        }
+    )
+
+    return true
+end
+exports("CreatePlayerAccount", createPlayerAccount)
+
+local function getAccountById(accountId)
+    local account = MySQL.query.await("SELECT * FROM ps_banking_accounts WHERE id = ?", { accountId })
+    return account[1] or nil
+end
+exports("GetAccountById", getAccountById)
+
+local function getAccountByHolder(accountName)
+	local account = MySQL.query.await("SELECT * FROM ps_banking_accounts WHERE holder = ?", { accountName })
+	return account[1] or nil
+end
+exports("GetAccountByHolder", getAccountByHolder)
+
+local function getAccountBalance(accountName)
+	local account = getAccountByHolder(accountName)
+	return account and account.balance or 0
+end
+exports("GetAccountBalance", getAccountBalance)
+
+local function createBankStatement(playerId, account, amount, reason, statementType, accountType)
+	local xPlayer = getPlayerFromId(playerId)
+	if not xPlayer then
+		return false
+	end
+
+	logTransaction(getPlayerIdentifier(xPlayer), reason, account, amount, statementType == "deposit")
+	return true
+end
+exports("CreateBankStatement", createBankStatement)
+
+local function addUserToAccountByHolder(accountName, userId)
+    local account = getAccountByHolder(accountName)
+    if not account then
+        return false
+    end
+    local users = json.decode(account.users or "[]")
+    table.insert(users, { identifier = userId })
+    MySQL.update.await(
+        "UPDATE ps_banking_accounts SET users = ? WHERE holder = ?",
+        { json.encode(users), accountName }
+    )
+    return true
+end
+exports("AddUserToAccountByHolder", addUserToAccountByHolder)
+
+local function removeUserFromAccountByHolder(accountName, userId)
+    local account = getAccountByHolder(accountName)
+    if not account then
+        return false
+    end
+    local users = json.decode(account.users or "[]")
+    local updatedUsers = {}
+    for _, user in ipairs(users) do
+        if user.identifier ~= userId then
+            table.insert(updatedUsers, user)
+        end
+    end
+    MySQL.update.await(
+        "UPDATE ps_banking_accounts SET users = ? WHERE holder = ?",
+        { json.encode(updatedUsers), accountName }
+    )
+    return true
+end
+exports("RemoveUserFromAccountByHolder", removeUserFromAccountByHolder)
+
+-- Society Compat MRI
+
 lib.callback.register("ps-banking:server:getHistory", function(source)
 	local xPlayer = getPlayerFromId(source)
 	local identifier = getPlayerIdentifier(xPlayer)
@@ -137,13 +288,6 @@ lib.callback.register("ps-banking:server:transferMoney", function(source, data)
 	end
 end)
 
-local function logTransaction(identifier, description, accountName, amount, isIncome)
-	MySQL.insert.await(
-		"INSERT INTO ps_banking_transactions (identifier, description, type, amount, date, isIncome) VALUES (?, ?, ?, ?, NOW(), ?)",
-		{ identifier, description, accountName, amount, isIncome }
-	)
-end
-
 RegisterNetEvent("ps-banking:server:logClient", function(account, moneyData)
 	if account.name ~= "bank" then
 		return
@@ -193,18 +337,15 @@ lib.callback.register("ps-banking:server:getTransactionStats", function(source)
 	}
 end)
 
-
 lib.callback.register("ps-banking:server:createNewAccount", function(source, newAccount)
 	local xPlayer = getPlayerFromId(source)
 	if not xPlayer then
 		return false
 	end
 
-	local jobName = newAccount.holder
-	local JOBS = exports.qbx_core:GetJobs()
-	if JOBS[jobName] then
-		return false
-	end
+    if not validateGroup(newAccount.holder) then
+        return false
+    end
 
 	MySQL.insert.await(
 		"INSERT INTO ps_banking_accounts (balance, holder, cardNumber, users, owner) VALUES (?, ?, ?, ?, ?)",
@@ -269,6 +410,15 @@ lib.callback.register("ps-banking:server:deleteAccount", function(source, accoun
 		return false
 	end
 
+    local account = getAccountById(accountId)
+    if not account then
+        return false
+    end
+
+    if not validateGroup(account.holder) then
+        return false
+    end
+
 	MySQL.query.await("DELETE FROM ps_banking_accounts WHERE id = ?", { accountId })
 	return true
 end)
@@ -309,7 +459,8 @@ lib.callback.register("ps-banking:server:depositToAccount", function(source, acc
 	if not xPlayer then
 		return false
 	end
-	if getPlayerAccounts(xPlayer) >= amount then
+    local bankBalance = getPlayerAccounts(xPlayer)
+	if tonumber(bankBalance) >= tonumber(amount) then
 		local affectedRows = MySQL.update.await(
 			"UPDATE ps_banking_accounts SET balance = balance + ? WHERE id = ?",
 			{ amount, accountId }
@@ -513,93 +664,6 @@ exports("createBill", createBill)
 ]]
 
 -- Society Compat MRI
-local function AddMoney(accountName, amount, reason)
-	local account = MySQL.query.await("SELECT * FROM ps_banking_accounts WHERE holder = ?", { accountName })
-	if #account > 0 then
-		MySQL.update.await(
-			"UPDATE ps_banking_accounts SET balance = balance + ? WHERE holder = ?",
-			{ amount, accountName }
-		)
-		logTransaction(getPlayerIdentifier(account[1].owner), reason, accountName, amount, true)
-		return true
-	end
-	return false
-end
-exports("AddMoney", AddMoney)
-
-local function RemoveMoney(accountName, amount, reason)
-	local account = MySQL.query.await("SELECT * FROM ps_banking_accounts WHERE holder = ?", { accountName })
-	if #account > 0 and account[1].balance >= amount then
-		MySQL.update.await(
-			"UPDATE ps_banking_accounts SET balance = balance - ? WHERE holder = ?",
-			{ amount, accountName }
-		)
-		logTransaction(getPlayerIdentifier(account[1].owner), reason, accountName, amount, false)
-		return true
-	end
-	return false
-end
-exports("RemoveMoney", RemoveMoney)
-
-local function generateCardNumber()
-    local rawNumber = tostring(math.random(1e15, 9e15))
-    local formattedNumber = rawNumber:gsub("(%d%d%d%d)", "%1 "):sub(1, -2)
-    return formattedNumber
-end
-
-local function CreatePlayerAccount(playerId, accountName, accountBalance, accountUsers)
-    local xPlayer = getPlayerFromId(playerId)
-
-    if not xPlayer then
-        return false
-    end
-
-    local cardNumber = generateCardNumber()
-
-    local ownerData = {
-        name = getName(xPlayer),
-        state = true,
-        identifier = getPlayerIdentifier(xPlayer)
-    }
-
-    MySQL.insert.await(
-        "INSERT INTO ps_banking_accounts (balance, holder, cardNumber, users, owner) VALUES (?, ?, ?, ?, ?)",
-        {
-            accountBalance,
-            accountName,
-            cardNumber,
-            json.encode(accountUsers),
-            json.encode(ownerData)
-        }
-    )
-
-    return true
-end
-exports("CreatePlayerAccount", CreatePlayerAccount)
-
-
-local function GetAccount(accountName)
-	local account = MySQL.query.await("SELECT * FROM ps_banking_accounts WHERE holder = ?", { accountName })
-	return account[1] or nil
-end
-exports("GetAccount", GetAccount)
-
-local function GetAccountBalance(accountName)
-	local account = GetAccount(accountName)
-	return account and account.balance or 0
-end
-exports("GetAccountBalance", GetAccountBalance)
-
-local function CreateBankStatement(playerId, account, amount, reason, statementType, accountType)
-	local xPlayer = getPlayerFromId(playerId)
-	if not xPlayer then
-		return false
-	end
-
-	logTransaction(getPlayerIdentifier(xPlayer), reason, account, amount, statementType == "deposit")
-	return true
-end
-exports("CreateBankStatement", CreateBankStatement)
 
 lib.callback.register("ps-banking:server:createSocietyAccount", function(source)
 	local xPlayer = getPlayerFromId(source)
@@ -610,9 +674,38 @@ lib.callback.register("ps-banking:server:createSocietyAccount", function(source)
     local job = xPlayer.PlayerData.job.name
     local isBoss = xPlayer.PlayerData.job.isboss
 
-    if not GetAccount(job) and isBoss then
-        CreatePlayerAccount(source, job, 0, {})
+    if not getAccountByHolder(job) and isBoss then
+        createPlayerAccount(source, job, 0, {})
 		return true
     end
 	return false
 end)
+
+lib.callback.register("ps-banking:server:playerGroupInfo", function(source, data, isJob)
+    local xPlayer = getPlayerFromId(source)
+    if not data then
+        return
+    end
+
+    local PlayerGroup = isJob and PlayerJob or PlayerGang
+
+    if PlayerGroup.name == data.name then
+        return
+    end
+
+    if PlayerGroup.name ~= isJob and "unemployed" or "none" then
+        removeUserFromAccountByHolder(PlayerJob.name, xPlayer.PlayerData.citizenid)
+    end
+
+    if data.name ~= isJob and "unemployed" or "none" then
+        addUserToAccountByHolder(data.name, xPlayer.PlayerData.citizenid)
+    end
+
+    if isJob then
+        PlayerJob = data
+    else
+        PlayerGang = data
+    end
+end)
+
+-- Society Compat MRI

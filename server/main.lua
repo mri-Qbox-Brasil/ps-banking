@@ -687,13 +687,17 @@ lib.callback.register("ps-banking:server:playerGroupInfo", function(source, data
         return
     end
 
+    if Config.Debug then
+        print("PlayerGroupInfo", data.name, isJob)
+    end
+
     local PlayerGroup = isJob and PlayerJob or PlayerGang
 
-    if PlayerGroup.name == data.name then
+    if PlayerGroup and PlayerGroup.name == data.name then
         return
     end
 
-    if PlayerGroup.name ~= isJob and "unemployed" or "none" then
+    if PlayerGroup and PlayerGroup.name ~= isJob and "unemployed" or "none" then
         removeUserFromAccountByHolder(PlayerJob.name, xPlayer.PlayerData.citizenid)
     end
 

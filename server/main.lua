@@ -376,9 +376,18 @@ lib.callback.register("ps-banking:server:getAccounts", function(source)
 	if not xPlayer then
 		return false
 	end
+	
 	local playerIdentifier = getPlayerIdentifier(xPlayer)
+	local playerJob = xPlayer.PlayerData.job.name
+	local playerGang = xPlayer.PlayerData.gang.name
+
+	if Config.Debug then
+		print(("[ps-banking] Buscando contas para jogador %s (Job: %s, Gang: %s)"):format(playerIdentifier, playerJob, playerGang))
+	end
+
 	local accounts = MySQL.query.await("SELECT * FROM ps_banking_accounts")
 	local result = {}
+
 	for _, account in ipairs(accounts) do
 		local accountData = {
 			id = account.id,
@@ -388,21 +397,66 @@ lib.callback.register("ps-banking:server:getAccounts", function(source)
 			users = json.decode(account.users),
 			owner = json.decode(account.owner),
 		}
-		if accountData.owner.identifier == playerIdentifier then
-			accountData.owner.state = true
-			table.insert(result, accountData)
+
+		local isJobOrGangAccount = not validateGroup(accountData.holder)
+
+		if Config.Debug then
+			print(("[ps-banking] Conta ID %s pertence a %s - Conta de Job/Gang? %s"):format(accountData.id, accountData.holder, isJobOrGangAccount))
+		end
+
+		if accountData.owner and accountData.owner.identifier == playerIdentifier then
+			if isJobOrGangAccount and accountData.holder ~= playerJob and accountData.holder ~= playerGang then
+				if Config.Debug then
+					print(("[ps-banking] REMOVENDO jogador %s como OWNER da conta %s (Job/Gang: %s)"):format(playerIdentifier, accountData.holder, accountData.holder))
+				end
+
+				accountData.owner = {}
+
+				MySQL.update.await(
+					"UPDATE ps_banking_accounts SET owner = ? WHERE id = ?",
+					{ json.encode(accountData.owner), accountData.id }
+				)
+			else
+				accountData.owner.state = true
+				table.insert(result, accountData)
+			end
 		else
-			for _, user in ipairs(accountData.users) do
+			local shouldRemove = false
+
+			if isJobOrGangAccount and accountData.holder ~= playerJob and accountData.holder ~= playerGang then
+				shouldRemove = true
+			end
+
+			for index, user in ipairs(accountData.users) do
 				if user.identifier == playerIdentifier then
-					accountData.owner.state = false
-					table.insert(result, accountData)
+					if shouldRemove then
+						if Config.Debug then
+							print(("[ps-banking] REMOVENDO jogador %s da lista de usuários da conta %s (Job/Gang: %s)"):format(playerIdentifier, accountData.holder, accountData.holder))
+						end
+
+						table.remove(accountData.users, index)
+
+						MySQL.update.await(
+							"UPDATE ps_banking_accounts SET users = ? WHERE id = ?",
+							{ json.encode(accountData.users), accountData.id }
+						)
+					else
+						accountData.owner.state = false
+						table.insert(result, accountData)
+					end
 					break
 				end
 			end
 		end
 	end
+
+	if Config.Debug then
+		print("[ps-banking] Contas processadas para o jogador:", json.encode(result, { indent = true }))
+	end
+
 	return result
 end)
+
 
 lib.callback.register("ps-banking:server:deleteAccount", function(source, accountId)
 	local xPlayer = getPlayerFromId(source)

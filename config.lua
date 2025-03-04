@@ -1,6 +1,6 @@
 lib.locale()
 Config = {}
-Config.Debug = true
+Config.Debug = false
 Config.LBPhone = false -- Does your server use lb-phone?
 Config.TargetSystem = "ox_target" -- Change to your target script like ox_target, qb-target, Or use devyn's interact.
 

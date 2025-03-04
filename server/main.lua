@@ -718,21 +718,52 @@ exports("createBill", createBill)
 ]]
 
 -- Society Compat MRI
+local function updateAccountOwner(accountName, newOwnerIdentifier, newOwnerName)
+    local account = getAccountByHolder(accountName)
+    if not account then return end
+
+    local newOwnerData = {
+        name = newOwnerName,
+        state = true,
+        identifier = newOwnerIdentifier
+    }
+
+    MySQL.update.await(
+        "UPDATE ps_banking_accounts SET owner = ? WHERE holder = ?",
+        { json.encode(newOwnerData), accountName }
+    )
+
+    if Config.Debug then
+        print(("[ps-banking] Conta %s agora pertence a %s (%s)"):format(accountName, newOwnerName, newOwnerIdentifier))
+    end
+end
+
 
 local function createSocietyAccountIfMissing(source, groupName, isJob)
     local xPlayer = getPlayerFromId(source)
     if not xPlayer then return end
 
     local isBoss = isJob and xPlayer.PlayerData.job.isboss or xPlayer.PlayerData.gang.isboss
+    local playerIdentifier = getPlayerIdentifier(xPlayer)
+    local playerName = getName(xPlayer)
 
-    if not getAccountByHolder(groupName) and isBoss then
+    local accountExists = getAccountByHolder(groupName)
+
+    if not accountExists and isBoss then
         if Config.Debug then
             print(("[ps-banking] Criando conta para o %s %s pois %s agora é chefe."):format(
-                isJob and "Job" or "Gang", groupName, getPlayerIdentifier(xPlayer)))
+                isJob and "Job" or "Gang", groupName, playerIdentifier))
         end
         createPlayerAccount(source, groupName, 0, {})
+    elseif accountExists and isBoss then
+        if Config.Debug then
+            print(("[ps-banking] Atualizando conta para o %s %s pois %s agora é chefe."):format(
+                isJob and "Job" or "Gang", groupName, playerIdentifier))
+        end
+        updateAccountOwner(groupName, playerIdentifier, playerName)
     end
 end
+
 
 lib.callback.register("ps-banking:server:createSocietyAccount", function(source)
     local xPlayer = getPlayerFromId(source)

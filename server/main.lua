@@ -719,45 +719,124 @@ exports("createBill", createBill)
 
 -- Society Compat MRI
 
-lib.callback.register("ps-banking:server:createSocietyAccount", function(source)
-	local xPlayer = getPlayerFromId(source)
-	if not xPlayer then
-		return false
-	end
+local function createSocietyAccountIfMissing(source, groupName, isJob)
+    local xPlayer = getPlayerFromId(source)
+    if not xPlayer then return end
 
-    local job = xPlayer.PlayerData.job.name
-    local isBoss = xPlayer.PlayerData.job.isboss
+    local isBoss = isJob and xPlayer.PlayerData.job.isboss or xPlayer.PlayerData.gang.isboss
 
-    if not getAccountByHolder(job) and isBoss then
-        createPlayerAccount(source, job, 0, {})
-		return true
+    if not getAccountByHolder(groupName) and isBoss then
+        if Config.Debug then
+            print(("[ps-banking] Criando conta para o %s %s pois %s agora é chefe."):format(
+                isJob and "Job" or "Gang", groupName, getPlayerIdentifier(xPlayer)))
+        end
+        createPlayerAccount(source, groupName, 0, {})
     end
-	return false
+end
+
+lib.callback.register("ps-banking:server:createSocietyAccount", function(source)
+    local xPlayer = getPlayerFromId(source)
+    if not xPlayer then
+        return false
+    end
+
+    createSocietyAccountIfMissing(source, xPlayer.PlayerData.job.name, true)
+    
+    createSocietyAccountIfMissing(source, xPlayer.PlayerData.gang.name, false)
+
+    return true
 end)
+
+
+local function removePlayerFromAccount(playerIdentifier, account)
+    local accountData = {
+        id = account.id,
+        holder = account.holder,
+        users = json.decode(account.users),
+        owner = json.decode(account.owner),
+    }
+
+    local isJobOrGangAccount = not validateGroup(accountData.holder)
+
+    if isJobOrGangAccount then
+        if accountData.owner and accountData.owner.identifier == playerIdentifier then
+            if Config.Debug then
+                print(("[ps-banking] Removendo jogador %s como OWNER da conta %s"):format(
+                    playerIdentifier, accountData.holder))
+            end
+            accountData.owner = {}
+            MySQL.update.await("UPDATE ps_banking_accounts SET owner = ? WHERE id = ?", 
+                { json.encode(accountData.owner), accountData.id })
+        end
+
+        for index, user in ipairs(accountData.users) do
+            if user.identifier == playerIdentifier then
+                if Config.Debug then
+                    print(("[ps-banking] Removendo jogador %s da lista de usuários da conta %s"):format(
+                        playerIdentifier, accountData.holder))
+                end
+                table.remove(accountData.users, index)
+                MySQL.update.await("UPDATE ps_banking_accounts SET users = ? WHERE id = ?", 
+                    { json.encode(accountData.users), accountData.id })
+                break
+            end
+        end
+    end
+end
+
+local function addPlayerToAccount(playerIdentifier, jobName)
+    if jobName == "unemployed" or jobName == "none" then
+        return
+    end
+
+    local account = MySQL.query.await("SELECT * FROM ps_banking_accounts WHERE holder = ?", { jobName })
+    if #account > 0 then
+        local accountData = account[1]
+        local users = json.decode(accountData.users)
+
+        local isUserPresent = false
+        for _, user in ipairs(users) do
+            if user.identifier == playerIdentifier then
+                isUserPresent = true
+                break
+            end
+        end
+
+        if not isUserPresent then
+            if Config.Debug then
+                print(("[ps-banking] Adicionando jogador %s à conta %s"):format(
+                    playerIdentifier, jobName))
+            end
+            table.insert(users, { identifier = playerIdentifier })
+            MySQL.update.await("UPDATE ps_banking_accounts SET users = ? WHERE holder = ?", 
+                { json.encode(users), jobName })
+        end
+    end
+end
 
 lib.callback.register("ps-banking:server:playerGroupInfo", function(source, data, isJob)
     local xPlayer = getPlayerFromId(source)
-    if not data then
+    if not xPlayer or not data or not data.name then
         return
     end
+
+    local playerIdentifier = getPlayerIdentifier(xPlayer)
+    local playerJob = xPlayer.PlayerData.job.name
+    local playerGang = xPlayer.PlayerData.gang.name
 
     if Config.Debug then
-        print("PlayerGroupInfo", data.name, isJob)
+        print(("[ps-banking] Atualizando contas para jogador %s (Novo %s: %s)"):format(
+            playerIdentifier, isJob and "Job" or "Gang", data.name))
     end
 
-    local PlayerGroup = isJob and PlayerJob or PlayerGang
-
-    if PlayerGroup and PlayerGroup.name == data.name then
-        return
+    local accounts = MySQL.query.await("SELECT * FROM ps_banking_accounts")
+    for _, account in ipairs(accounts) do
+        removePlayerFromAccount(playerIdentifier, account)
     end
 
-    if PlayerGroup and PlayerGroup.name ~= isJob and "unemployed" or "none" then
-        removeUserFromAccountByHolder(PlayerJob.name, xPlayer.PlayerData.citizenid)
-    end
+    createSocietyAccountIfMissing(source, data.name, isJob)
 
-    if data.name ~= isJob and "unemployed" or "none" then
-        addUserToAccountByHolder(data.name, xPlayer.PlayerData.citizenid)
-    end
+    addPlayerToAccount(playerIdentifier, data.name)
 
     if isJob then
         PlayerJob = data
@@ -765,5 +844,6 @@ lib.callback.register("ps-banking:server:playerGroupInfo", function(source, data
         PlayerGang = data
     end
 end)
+
 
 -- Society Compat MRI

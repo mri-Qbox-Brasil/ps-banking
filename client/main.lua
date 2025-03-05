@@ -363,7 +363,7 @@ RegisterNUICallback("ps-banking:client:getAmountPresets", function(_, cb)
 end)
 
 AddEventHandler('onResourceStart', function(resource)
-   if not resource == GetCurrentResourceName() then return end
+   if resource ~= GetCurrentResourceName() then return end
 
    local success = lib.callback.await("ps-banking:server:createSocietyAccount", false)
    if not success then

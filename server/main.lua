@@ -73,30 +73,44 @@ local function validateGroup(group)
 end
 
 local function addMoney(accountName, amount, reason)
-	local account = MySQL.query.await("SELECT * FROM ps_banking_accounts WHERE holder = ?", { accountName })
-	if #account > 0 then
-		MySQL.update.await(
-			"UPDATE ps_banking_accounts SET balance = balance + ? WHERE holder = ?",
-			{ amount, accountName }
-		)
-		logTransaction(getPlayerIdentifier(account[1].owner), reason, accountName, amount, true)
-		return true
-	end
-	return false
+    local account = MySQL.query.await("SELECT * FROM ps_banking_accounts WHERE holder = ?", { accountName })
+    if #account > 0 then
+        MySQL.update.await(
+            "UPDATE ps_banking_accounts SET balance = balance + ? WHERE holder = ?",
+            { amount, accountName }
+        )
+
+        local ownerData = json.decode(account[1].owner or "{}")
+        local identifier = ownerData and ownerData.identifier or nil
+
+        if identifier then
+            logTransaction(identifier, reason, accountName, amount, true)
+        end
+
+        return true
+    end
+    return false
 end
 exports("AddMoney", addMoney)
 
 local function removeMoney(accountName, amount, reason)
-	local account = MySQL.query.await("SELECT * FROM ps_banking_accounts WHERE holder = ?", { accountName })
-	if #account > 0 and account[1].balance >= amount then
-		MySQL.update.await(
-			"UPDATE ps_banking_accounts SET balance = balance - ? WHERE holder = ?",
-			{ amount, accountName }
-		)
-		logTransaction(getPlayerIdentifier(account[1].owner), reason, accountName, amount, false)
-		return true
-	end
-	return false
+    local account = MySQL.query.await("SELECT * FROM ps_banking_accounts WHERE holder = ?", { accountName })
+    if #account > 0 and account[1].balance >= amount then
+        MySQL.update.await(
+            "UPDATE ps_banking_accounts SET balance = balance - ? WHERE holder = ?",
+            { amount, accountName }
+        )
+
+        local ownerData = json.decode(account[1].owner or "{}")
+        local identifier = ownerData and ownerData.identifier or nil
+
+        if identifier then
+            logTransaction(identifier, reason, accountName, amount, false)
+        end
+
+        return true
+    end
+    return false
 end
 exports("RemoveMoney", removeMoney)
 

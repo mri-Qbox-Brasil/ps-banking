@@ -696,11 +696,34 @@ lib.callback.register("ps-banking:server:payBill", function(source, billId)
 	end
 	local bill = result[1]
 	local amount = bill.amount
+
+	local xPlayerName = xPlayer.PlayerData.charinfo.firstname ..' '.. xPlayer.PlayerData.charinfo.lastname
+
+	local identifier2 = bill.identifier2
+	local senderPlayer = exports.qbx_core:GetOfflinePlayer(identifier2)
+	local senderName = senderPlayer.PlayerData.charinfo.firstname ..' '.. senderPlayer.PlayerData.charinfo.lastname
+	local senderLicense = senderPlayer.PlayerData.license
+
 	if tonumber(getPlayerAccounts(xPlayer)) >= tonumber(amount) then
 		if framework == "ESX" then
 			xPlayer.removeAccountMoney("bank", tonumber(amount))
 		elseif framework == "QBCore" then
 			xPlayer.Functions.RemoveMoney("bank", tonumber(amount))
+			-- senderPlayer.Functions.AddMoney("bank", tonumber(amount))
+			exports.qbx_core:AddMoney(identifier2, "bank", amount, "Fatura recebida: ".. bill.description)
+
+			logTransaction(identifier2, "Fatura recebida: ".. bill.description, xPlayerName, amount, true)
+			logTransaction(identifier, "Fatura paga: ".. bill.description, xPlayerName, amount, false)
+
+			local senderSource = exports.qbx_core:GetSource(senderLicense)
+			print(xPlayerName .. " pagou uma fatura de R$" .. amount, "ID", senderSource)
+			if senderSource > 0 then 
+				exports["lb-phone"]:SendNotification(senderSource, {
+					app = "Wallet",
+					title = "Uma fatura foi paga",
+					content = xPlayerName .. " pagou uma fatura de R$" .. amount .. ".",
+				})
+			end
 		end
 		MySQL.query.await("DELETE FROM ps_banking_bills WHERE id = ?", { billId })
 		return true
@@ -711,13 +734,14 @@ end)
 
 function createBill(data)
 	local identifier = data.identifier
+	local identifier2 = data.identifier2
 	local description = data.description
 	local type = data.type
 	local amount = data.amount
 
 	MySQL.insert.await(
-		"INSERT INTO ps_banking_bills (identifier, description, type, amount, date, isPaid) VALUES (?, ?, ?, ?, NOW(), ?)",
-		{ identifier, description, type, amount, false }
+		"INSERT INTO ps_banking_bills (identifier, identifier2, description, type, amount, date, isPaid) VALUES (?, ?, ?, ?, ?, NOW(), ?)",
+		{ identifier, identifier2, description, type, amount, false }
 	)
 end
 exports("createBill", createBill)

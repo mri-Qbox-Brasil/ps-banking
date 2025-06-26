@@ -34,5 +34,4 @@ dependencies {
 
 lua54 'yes'
 
-provide 'qb-banking'
-provide 'qb-management'
+provides { 'qb-banking', 'qb-management' }

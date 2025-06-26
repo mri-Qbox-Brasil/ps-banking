@@ -53,6 +53,11 @@ local function logTransaction(identifier, description, accountName, amount, isIn
 end
 
 -- Society Compat MRI
+local function exportHandler(exportName, func)
+    AddEventHandler(('__cfx_export_%s_%s'):format('qb-banking', exportName), function(setCB)
+        setCB(func)
+    end)
+end
 
 local PlayerJob = nil
 local PlayerGang = nil
@@ -92,6 +97,7 @@ local function addMoney(accountName, amount, reason)
     return false
 end
 exports("AddMoney", addMoney)
+exportHandler("AddMoney", addMoney)
 
 local function removeMoney(accountName, amount, reason)
     local account = MySQL.query.await("SELECT * FROM ps_banking_accounts WHERE holder = ?", { accountName })
@@ -113,6 +119,7 @@ local function removeMoney(accountName, amount, reason)
     return false
 end
 exports("RemoveMoney", removeMoney)
+exportHandler("RemoveMoney", removeMoney)
 
 local function createPlayerAccount(playerId, accountName, accountBalance, accountUsers)
     local xPlayer = getPlayerFromId(playerId)
@@ -155,12 +162,15 @@ local function getAccountByHolder(accountName)
 	return account[1] or nil
 end
 exports("GetAccountByHolder", getAccountByHolder)
+exports("GetAccount", getAccountByHolder) -- provavelmente temos que preparar os dados antes de enviar
+exportHandler("GetAccount", getAccountByHolder)
 
 local function getAccountBalance(accountName)
 	local account = getAccountByHolder(accountName)
 	return account and account.balance or 0
 end
 exports("GetAccountBalance", getAccountBalance)
+exportHandler("GetAccountBalance", getAccountBalance)
 
 local function createBankStatement(playerId, account, amount, reason, statementType, accountType)
 	local xPlayer = getPlayerFromId(playerId)

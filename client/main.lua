@@ -9,6 +9,13 @@ RegisterNUICallback("ps-banking:client:hideUI", function(_, cb)
     cb({})
 end)
 
+RegisterNUICallback("ps-banking:client:getColorConfig", function(_, cb)
+    local inventoryColor = GetConvar("inventory:color", "#43c42f") -- Default to green-500 if not set
+    cb({
+        color = inventoryColor
+    })
+end)
+
 RegisterNUICallback("ps-banking:client:phoneOption", function(_, cb)
     cb(Config.LBPhone)
 end)
@@ -36,7 +43,8 @@ Citizen.CreateThread(function()
                 name = locale("openBank").."interact:name",
                 options = {
                      {
-                        label = 'Access Bank',
+                        icon = "fas fa-credit-card",
+                        label = locale("openBank"),
                         action = function()
                             SendNUIMessage({
                                 action = "openBank",
@@ -60,33 +68,32 @@ Citizen.CreateThread(function()
                 },
             })
         else
-        exports["qb-target"]:AddBoxZone(zoneName, vector3(location.x, location.y, location.z), 1.5, 1.6, {
-            name = zoneName,
-            heading = 0.0,
-            debugPoly = false,
-            minZ = location.z - 1,
-            maxZ = location.z + 1,
-        }, {
-            options = {
-                {
-                    icon = "fas fa-credit-card",
-                    label = locale("openBank"),
-                    action = function()
-                        SendNUIMessage({
-                            action = "openBank",
-                        })
-                        SetNuiFocus(true, true)
-                    end,
+            exports["qb-target"]:AddBoxZone(zoneName, vector3(location.x, location.y, location.z), 1.5, 1.6, {
+                name = zoneName,
+                heading = 0.0,
+                debugPoly = false,
+                minZ = location.z - 1,
+                maxZ = location.z + 1,
+            }, {
+                options = {
+                    {
+                        icon = "fas fa-credit-card",
+                        label = locale("openBank"),
+                        action = function()
+                            SendNUIMessage({
+                                action = "openBank",
+                            })
+                            SetNuiFocus(true, true)
+                        end,
+                    },
                 },
-            },
-            distance = 2.5,
-        })
+                distance = 2.5,
+            })
+        end
+        
         zoneId = zoneId + 1
-    end
 
-    for i = 1, #Config.BankLocations.Coords do
-        local blip = AddBlipForCoord(vector3(Config.BankLocations.Coords[i].x, Config.BankLocations.Coords[i].y,
-            Config.BankLocations.Coords[i].z))
+        local blip = AddBlipForCoord(vector3(location.x, location.y, location.z))
         SetBlipSprite(blip, Config.BankLocations.Blips.sprite)
         SetBlipDisplay(blip, 4)
         SetBlipScale(blip, Config.BankLocations.Blips.scale)
@@ -95,7 +102,6 @@ Citizen.CreateThread(function()
         BeginTextCommandSetBlipName("STRING")
         AddTextComponentSubstringPlayerName(Config.BankLocations.Blips.name)
         EndTextCommandSetBlipName(blip)
-        end
     end
 end)
 
@@ -128,6 +134,7 @@ Citizen.CreateThread(function()
                 interactDst = 2.5,
                 options = {
                     {
+                        icon = "fas fa-credit-card",
                         label = locale("openATM"),
                         event = "ps-banking:client:open:atm",
                     },

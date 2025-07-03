@@ -1,226 +1,296 @@
 <script lang="ts">
-  import { writable } from "svelte/store";
-  import { slide, scale } from "svelte/transition";
-  import { quintOut } from "svelte/easing";
   import { onMount } from "svelte";
-  import {
-    Notify,
-    currentCash,
-    bankBalance,
-    Locales,
-    Currency,
-  } from "../store/data";
+  import { writable } from "svelte/store";
+  import { slide } from "svelte/transition";
+  import { quintOut } from "svelte/easing";
   import { fetchNui } from "../utils/fetchNui";
-  import {
-    Chart,
-    LineController,
-    LineElement,
-    PointElement,
-    LinearScale,
-    Title,
-    CategoryScale,
-    Tooltip,
-  } from "chart.js";
+  import { Locales, Currency, bankBalance, currentCash } from "../store/data";
 
-  let totalTransactions = writable(0);
-  let totalAmount = writable(0);
+  let weeklyStats = writable({ totalReceived: 0, totalUsed: 0, totalTransactions: 0 });
+  let monthlyStats = writable({ totalReceived: 0, totalUsed: 0, totalTransactions: 0 });
+  let allTimeStats = writable({ totalReceived: 0, totalUsed: 0, totalTransactions: 0 });
 
-  let dataSheets = {
-    Transactions: [],
-    Dates: [],
-  };
-
-  let chart: Chart<"line", never[], string>;
-
-  async function fetchTransactionStats() {
+  async function fetchStats() {
     try {
-      const stats = await fetchNui("ps-banking:client:getTransactionStats", {});
-      totalTransactions.set(stats.totalCount);
-      totalAmount.set(stats.totalAmount);
-
-      const transactionData = stats.transactionData.map(
-        (stat: { amount: any }) => stat.amount
-      );
-      const transactionDates = stats.transactionData.map(
-        (stat: { date: any }) => new Date(stat.date).toLocaleDateString()
-      );
-
-      dataSheets.Transactions = transactionData;
-      dataSheets.Dates = transactionDates;
-
-      if (chart) {
-        chart.data.labels = transactionDates;
-        chart.data.datasets[0].data = transactionData;
-        chart.update();
-      }
+      const weekly = await fetchNui("ps-banking:client:getWeeklySummary", {});
+      const monthly = await fetchNui("ps-banking:client:getMonthlySummary", {});
+      const allTime = await fetchNui("ps-banking:client:getAllTimeSummary", {});
+      
+      weeklyStats.set(weekly || { totalReceived: 0, totalUsed: 0, totalTransactions: 0 });
+      monthlyStats.set(monthly || { totalReceived: 0, totalUsed: 0, totalTransactions: 0 });
+      allTimeStats.set(allTime || { totalReceived: 0, totalUsed: 0, totalTransactions: 0 });
     } catch (error) {
-      console.error("Error fetching transaction stats:", error);
+      console.error(error);
     }
   }
 
-  Chart.register(
-    LineController,
-    LineElement,
-    PointElement,
-    LinearScale,
-    Title,
-    CategoryScale,
-    Tooltip
-  );
-
   onMount(() => {
-    fetchTransactionStats();
-
-    // @ts-expect-error
-    const ctx = document.getElementById("transactionChart").getContext("2d");
-    chart = new Chart(ctx, {
-      type: "line",
-      data: {
-        labels: dataSheets.Dates,
-        datasets: [
-          {
-            label: "Transactions",
-            data: dataSheets.Transactions,
-            borderColor: "rgba(59, 130, 246, 1)",
-            backgroundColor: "rgba(59, 130, 246, 0.2)",
-            fill: true,
-            tension: 0.5,
-            pointStyle: "rectRounded",
-            pointRadius: 5,
-            pointHoverRadius: 7,
-            borderWidth: 2,
-          },
-        ],
-      },
-      options: {
-        responsive: true,
-        plugins: {
-          legend: {
-            display: true,
-            position: "top",
-            labels: {
-              usePointStyle: true,
-              color: "white",
-            },
-          },
-          tooltip: {
-            backgroundColor: "rgba(0,0,0,0.7)",
-            titleColor: "white",
-            bodyColor: "white",
-            cornerRadius: 4,
-            displayColors: false,
-          },
-        },
-        scales: {
-          x: {
-            display: true,
-            title: {
-              display: true,
-              text: $Locales.date,
-              color: "white",
-            },
-            ticks: {
-              color: "white",
-            },
-            grid: {
-              color: "rgba(255,255,255,0.1)",
-            },
-          },
-          y: {
-            display: true,
-            title: {
-              display: true,
-              text: $Locales.amount,
-              color: "white",
-            },
-            ticks: {
-              color: "white",
-            },
-            grid: {
-              color: "rgba(255,255,255,0.1)",
-            },
-            suggestedMin: 0,
-            suggestedMax: dataSheets.Transactions.reduce(
-              (acc, val) => acc + val,
-              0
-            ),
-          },
-        },
-      },
-    });
+    fetchStats();
   });
 </script>
 
-<!-- svelte-ignore a11y-label-has-associated-control -->
-<div class="absolute w-full h-full bg-gray-800 text-white">
-  <div
-    class="absolute w-[90%] h-full p-6 overflow-auto left-[130px]"
-    in:slide={{ duration: 1000, easing: quintOut }}
-  >
-    <div class="bg-gray-700/20 rounded-lg shadow-md p-6">
-      <h2 class="text-3xl font-bold mb-6">{$Locales.statistics_reports}</h2>
-      <div class="flex justify-between items-center mb-6">
-        <div class="flex items-center">
-          <i class="fa-duotone fa-chart-line text-3xl text-blue-200 mr-3"></i>
-          <h3 class="text-2xl font-semibold text-blue-200">
-            {$Locales.overview}
-          </h3>
-        </div>
-        <div class="bg-gray-500/40 rounded-xl px-3 py-1 flex items-center">
-          <i class="fa-duotone fa-wallet text-gray-400 mr-2"></i>
-          <span class="text-lg font-semibold text-white">
-            {$Locales.total_balance}: {#if $bankBalance !== undefined}
-              {$bankBalance.toLocaleString($Currency.lang, {
-                style: "currency",
-                currency: $Currency.currency,
-                minimumFractionDigits: 0,
-              })}
-            {/if}
-          </span>
+<div class="h-full flex flex-col p-8 overflow-y-auto">
+  <!-- Page Header -->
+  <div class="flex items-center justify-between mb-8">
+    <div>
+      <h1 class="text-3xl font-bold text-white mb-2">{$Locales.stats}</h1>
+      <p class="text-white/60">{$Locales.financial_statistics_analytics}</p>
+    </div>
+    <div class="flex items-center space-x-4">
+      <div class="modern-card px-4 py-2">
+        <div class="flex items-center space-x-2">
+                      <i class="fas fa-chart-line text-green-400"></i>
+          <span class="text-sm text-white/80">{$Locales.analytics}</span>
         </div>
       </div>
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-        <div class="bg-gray-700 p-4 rounded-lg shadow">
-          <div class="flex justify-between items-center mb-4">
-            <h4 class="text-xl font-semibold text-blue-200">
-              {$Locales.total_transactions}
-            </h4>
-            <i class="fa-duotone fa-exchange-alt text-yellow-400 text-2xl"></i>
-          </div>
-          <p class="text-2xl font-bold">{$totalTransactions}</p>
+    </div>
+  </div>
+
+  <!-- Current Balance Overview -->
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+    <div class="modern-card p-6">
+      <div class="flex items-center space-x-4">
+        <div class="w-12 h-12 bg-blue-500/20 rounded-xl flex items-center justify-center">
+          <i class="fas fa-university text-blue-400 text-lg"></i>
         </div>
-        <div class="bg-gray-700 p-4 rounded-lg shadow">
-          <div class="flex justify-between items-center mb-4">
-            <h4 class="text-xl font-semibold text-blue-200">
-              {$Locales.amount}
-            </h4>
-            <i class="fa-duotone fa-coins text-green-400 text-2xl"></i>
-          </div>
-          <p class="text-2xl font-bold">
-            {#if $totalAmount !== undefined}
-              {$totalAmount.toLocaleString($Currency.lang, {
-                style: "currency",
-                currency: $Currency.currency,
-                minimumFractionDigits: 0,
-              })}
-            {:else}
-              0
+        <div>
+          <p class="text-white/60 text-sm">{$Locales.bank_balance}</p>
+          <p class="text-2xl font-bold text-white">
+                          {#if $bankBalance >= 1000000}
+                R$ {($bankBalance / 1000000).toFixed(1)}M
+              {:else if $bankBalance >= 1000}
+                R$ {($bankBalance / 1000).toFixed(1)}K
+              {:else}
+                R$ {$bankBalance.toLocaleString()}
             {/if}
           </p>
         </div>
       </div>
-      <div class="bg-gray-700 p-4 rounded-lg shadow">
-        <div class="flex justify-between items-center mb-4">
-          <h4 class="text-xl font-semibold text-blue-200">
-            {$Locales.transactions_trend}
-          </h4>
-          <i class="fa-duotone fa-chart-line text-blue-400 text-2xl"></i>
+          </div>
+
+    <div class="modern-card p-6">
+      <div class="flex items-center space-x-4">
+        <div class="w-12 h-12 bg-green-500/20 rounded-xl flex items-center justify-center">
+          <i class="fas fa-wallet text-green-400 text-lg"></i>
         </div>
-        <div
-          class="relative w-[1000px] left-[15%]"
-          in:scale={{ duration: 2500, easing: quintOut }}
-        >
-          <canvas id="transactionChart"></canvas>
+        <div>
+          <p class="text-white/60 text-sm">{$Locales.cash_on_hand}</p>
+          <p class="text-2xl font-bold text-white">
+                          {#if $currentCash >= 1000000}
+                R$ {($currentCash / 1000000).toFixed(1)}M
+              {:else if $currentCash >= 1000}
+                R$ {($currentCash / 1000).toFixed(1)}K
+            {:else}
+                R$ {$currentCash.toLocaleString()}
+            {/if}
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Statistics Cards -->
+  <div class="grid gap-8">
+    <!-- Weekly Stats -->
+    <div class="modern-card p-6">
+      <div class="flex items-center justify-between mb-6">
+        <div class="flex items-center space-x-3">
+          <div class="w-10 h-10 bg-green-500/20 rounded-lg flex items-center justify-center">
+            <i class="fas fa-calendar-week text-green-400"></i>
+          </div>
+          <h3 class="text-xl font-semibold text-white">{$Locales.weekly_summary}</h3>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div class="bg-white/5 rounded-xl p-4">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-white/60 text-sm">{$Locales.income}</p>
+              <p class="text-lg font-bold text-green-400">
+                {#if $weeklyStats.totalReceived >= 1000000}
+                  R$ {($weeklyStats.totalReceived / 1000000).toFixed(1)}M
+                {:else if $weeklyStats.totalReceived >= 1000}
+                  R$ {($weeklyStats.totalReceived / 1000).toFixed(1)}K
+                {:else}
+                  R$ {$weeklyStats.totalReceived.toLocaleString()}
+                {/if}
+              </p>
+            </div>
+            <i class="fas fa-arrow-up text-green-400"></i>
+          </div>
+        </div>
+
+        <div class="bg-white/5 rounded-xl p-4">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-white/60 text-sm">{$Locales.expenses}</p>
+              <p class="text-lg font-bold text-red-400">
+                {#if $weeklyStats.totalUsed >= 1000000}
+                  R$ {($weeklyStats.totalUsed / 1000000).toFixed(1)}M
+                {:else if $weeklyStats.totalUsed >= 1000}
+                  R$ {($weeklyStats.totalUsed / 1000).toFixed(1)}K
+                {:else}
+                  R$ {$weeklyStats.totalUsed.toLocaleString()}
+                {/if}
+              </p>
+            </div>
+            <i class="fas fa-arrow-down text-red-400"></i>
+          </div>
+        </div>
+
+        <div class="bg-white/5 rounded-xl p-4">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-white/60 text-sm">{$Locales.net_change}</p>
+              <p class={`text-lg font-bold ${($weeklyStats.totalReceived - $weeklyStats.totalUsed) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                {#if Math.abs($weeklyStats.totalReceived - $weeklyStats.totalUsed) >= 1000000}
+                  R$ {(Math.abs($weeklyStats.totalReceived - $weeklyStats.totalUsed) / 1000000).toFixed(1)}M
+                {:else if Math.abs($weeklyStats.totalReceived - $weeklyStats.totalUsed) >= 1000}
+                  R$ {(Math.abs($weeklyStats.totalReceived - $weeklyStats.totalUsed) / 1000).toFixed(1)}K
+                {:else}
+                  R$ {Math.abs($weeklyStats.totalReceived - $weeklyStats.totalUsed).toLocaleString()}
+                {/if}
+              </p>
+            </div>
+            <i class={`fas ${($weeklyStats.totalReceived - $weeklyStats.totalUsed) >= 0 ? 'fa-chart-line text-green-400' : 'fa-chart-line-down text-red-400'}`}></i>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Monthly Stats -->
+    <div class="modern-card p-6">
+      <div class="flex items-center justify-between mb-6">
+        <div class="flex items-center space-x-3">
+          <div class="w-10 h-10 bg-blue-500/20 rounded-lg flex items-center justify-center">
+            <i class="fas fa-calendar-alt text-blue-400"></i>
+          </div>
+          <h3 class="text-xl font-semibold text-white">{$Locales.monthly_summary}</h3>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div class="bg-white/5 rounded-xl p-4">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-white/60 text-sm">{$Locales.income}</p>
+              <p class="text-lg font-bold text-green-400">
+                {#if $monthlyStats.totalReceived >= 1000000}
+                  R$ {($monthlyStats.totalReceived / 1000000).toFixed(1)}M
+                {:else if $monthlyStats.totalReceived >= 1000}
+                  R$ {($monthlyStats.totalReceived / 1000).toFixed(1)}K
+                {:else}
+                  R$ {$monthlyStats.totalReceived.toLocaleString()}
+                {/if}
+              </p>
+            </div>
+            <i class="fas fa-arrow-up text-green-400"></i>
+          </div>
+        </div>
+
+        <div class="bg-white/5 rounded-xl p-4">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-white/60 text-sm">{$Locales.expenses}</p>
+              <p class="text-lg font-bold text-red-400">
+                {#if $monthlyStats.totalUsed >= 1000000}
+                  ${($monthlyStats.totalUsed / 1000000).toFixed(1)}M
+                {:else if $monthlyStats.totalUsed >= 1000}
+                  ${($monthlyStats.totalUsed / 1000).toFixed(1)}K
+                {:else}
+                  ${$monthlyStats.totalUsed.toLocaleString()}
+                {/if}
+              </p>
+            </div>
+            <i class="fas fa-arrow-down text-red-400"></i>
+          </div>
+        </div>
+
+        <div class="bg-white/5 rounded-xl p-4">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-white/60 text-sm">{$Locales.net_change}</p>
+              <p class={`text-lg font-bold ${($monthlyStats.totalReceived - $monthlyStats.totalUsed) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                {#if Math.abs($monthlyStats.totalReceived - $monthlyStats.totalUsed) >= 1000000}
+                  ${(Math.abs($monthlyStats.totalReceived - $monthlyStats.totalUsed) / 1000000).toFixed(1)}M
+                {:else if Math.abs($monthlyStats.totalReceived - $monthlyStats.totalUsed) >= 1000}
+                  ${(Math.abs($monthlyStats.totalReceived - $monthlyStats.totalUsed) / 1000).toFixed(1)}K
+                {:else}
+                  ${Math.abs($monthlyStats.totalReceived - $monthlyStats.totalUsed).toLocaleString()}
+                {/if}
+              </p>
+            </div>
+            <i class={`fas ${($monthlyStats.totalReceived - $monthlyStats.totalUsed) >= 0 ? 'fa-chart-line text-green-400' : 'fa-chart-line-down text-red-400'}`}></i>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- All Time Stats -->
+    <div class="modern-card p-6">
+      <div class="flex items-center justify-between mb-6">
+        <div class="flex items-center space-x-3">
+          <div class="w-10 h-10 bg-yellow-500/20 rounded-lg flex items-center justify-center">
+            <i class="fas fa-infinity text-yellow-400"></i>
+          </div>
+          <h3 class="text-xl font-semibold text-white">{$Locales.all_time_summary}</h3>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div class="bg-white/5 rounded-xl p-4">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-white/60 text-sm">{$Locales.total_income}</p>
+              <p class="text-lg font-bold text-green-400">
+                {#if $allTimeStats.totalReceived >= 1000000}
+                  ${($allTimeStats.totalReceived / 1000000).toFixed(1)}M
+                {:else if $allTimeStats.totalReceived >= 1000}
+                  ${($allTimeStats.totalReceived / 1000).toFixed(1)}K
+                {:else}
+                  ${$allTimeStats.totalReceived.toLocaleString()}
+                {/if}
+              </p>
+            </div>
+            <i class="fas fa-arrow-up text-green-400"></i>
+          </div>
+        </div>
+
+        <div class="bg-white/5 rounded-xl p-4">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-white/60 text-sm">{$Locales.total_expenses}</p>
+              <p class="text-lg font-bold text-red-400">
+                {#if $allTimeStats.totalUsed >= 1000000}
+                  ${($allTimeStats.totalUsed / 1000000).toFixed(1)}M
+                {:else if $allTimeStats.totalUsed >= 1000}
+                  ${($allTimeStats.totalUsed / 1000).toFixed(1)}K
+                {:else}
+                  ${$allTimeStats.totalUsed.toLocaleString()}
+                {/if}
+              </p>
+            </div>
+            <i class="fas fa-arrow-down text-red-400"></i>
+          </div>
+        </div>
+
+        <div class="bg-white/5 rounded-xl p-4">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-white/60 text-sm">{$Locales.net_lifetime}</p>
+              <p class={`text-lg font-bold ${($allTimeStats.totalReceived - $allTimeStats.totalUsed) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                {#if Math.abs($allTimeStats.totalReceived - $allTimeStats.totalUsed) >= 1000000}
+                  ${(Math.abs($allTimeStats.totalReceived - $allTimeStats.totalUsed) / 1000000).toFixed(1)}M
+                {:else if Math.abs($allTimeStats.totalReceived - $allTimeStats.totalUsed) >= 1000}
+                  ${(Math.abs($allTimeStats.totalReceived - $allTimeStats.totalUsed) / 1000).toFixed(1)}K
+                {:else}
+                  ${Math.abs($allTimeStats.totalReceived - $allTimeStats.totalUsed).toLocaleString()}
+                {/if}
+              </p>
+            </div>
+            <i class={`fas ${($allTimeStats.totalReceived - $allTimeStats.totalUsed) >= 0 ? 'fa-trophy text-yellow-400' : 'fa-chart-line-down text-red-400'}`}></i>
+          </div>
         </div>
       </div>
     </div>

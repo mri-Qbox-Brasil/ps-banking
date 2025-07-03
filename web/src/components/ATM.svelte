@@ -1,8 +1,8 @@
 <script lang="ts">
-  import { writable, get } from "svelte/store";
+  import { writable } from "svelte/store";
   import { onMount } from "svelte";
   import { fetchNui } from "../utils/fetchNui";
-  import { slide, fade, scale } from "svelte/transition";
+  import { fade } from "svelte/transition";
   import { quintOut } from "svelte/easing";
   import {
     showATM,
@@ -14,13 +14,15 @@
     Currency,
   } from "../store/data";
 
-  let customWithdraw = writable(0);
-  let customDeposit = writable(0);
   let withdrawAmounts = writable([]);
   let depositAmounts = writable([]);
   let gridColsPreset = writable(3);
+  let customWithdraw = writable(0);
+  let customDeposit = writable(0);
 
-  $: (customDeposit = currentCash), (customWithdraw = bankBalance);
+  // Initialize custom amounts but don't auto-update them
+  $: if ($customDeposit === 0) customDeposit.set($currentCash);
+  // Remove auto-update for customWithdraw to prevent showing wrong balance after withdrawal
 
   async function getAmountPresets() {
     try {
@@ -56,22 +58,19 @@
 
   async function heav(amount: number) {
     try {
+      if (amount <= 0 || amount > $bankBalance) return;
+      
       const response = await fetchNui("ps-banking:client:ATMwithdraw", {
         amount: amount,
       });
+      
       if (response) {
-        Notify(
-          `${$Locales.withdrawn} ${amount.toLocaleString($Currency.lang, {
-            style: "currency",
-            currency: $Currency.currency,
-            minimumFractionDigits: 0,
-          })}`,
-          $Locales.payment_completed,
-          "coins"
-        );
+        // Only update balances if transaction was successful
+        // Update balances from server to ensure accuracy
         await updateBalances();
-      } else {
-        Notify($Locales.no_money_on_account, $Locales.error, "credit-card");
+        
+        // Reset custom amount
+        customWithdraw.set(0);
       }
     } catch (error) {
       console.error(error);
@@ -80,22 +79,19 @@
 
   async function deposit(amount: number) {
     try {
+      if (amount <= 0 || amount > $currentCash) return;
+      
       const response = await fetchNui("ps-banking:client:ATMdeposit", {
         amount: amount,
       });
+      
       if (response) {
-        Notify(
-          `${$Locales.deposited} ${amount.toLocaleString($Currency.lang, {
-            style: "currency",
-            currency: $Currency.currency,
-            minimumFractionDigits: 0,
-          })}`,
-          $Locales.payment_completed,
-          "coins"
-        );
+        // Only update balances if transaction was successful
+        // Update balances from server to ensure accuracy
         await updateBalances();
-      } else {
-        Notify($Locales.no_cash_on_you, $Locales.error, "credit-card");
+        
+        // Reset custom amount
+        customDeposit.set(0);
       }
     } catch (error) {
       console.error(error);
@@ -111,162 +107,163 @@
     }
   }
 
+  function closeATM() {
+    showATM.set(false);
+    fetchNui("ps-banking:client:hideUI");
+  }
+
+  // Handle escape key
+  function handleKeydown(event: KeyboardEvent) {
+    if (event.key === 'Escape') {
+      closeATM();
+    }
+  }
+
   onMount(() => {
     getAmountPresets();
     getLocales();
     updateBalances();
-    const keyHandler = (e: KeyboardEvent) => {
-      if (get(showATM) && ["Escape"].includes(e.code)) {
-        fetchNui("ps-banking:client:hideUI");
-        showATM.set(false);
-      }
+    window.addEventListener('keydown', handleKeydown);
+    return () => {
+      window.removeEventListener('keydown', handleKeydown);
     };
-    window.addEventListener("keydown", keyHandler);
-    return () => window.removeEventListener("keydown", keyHandler);
   });
 </script>
 
-<div class="absolute w-screen h-screen flex items-center justify-center">
-  <div
-    class="absolute inset-0 flex items-center justify-center"
-    in:scale={{ duration: 1000, easing: quintOut }}
-    out:scale={{ duration: 1000, easing: quintOut }}
-  >
-    <div
-      class="h-auto w-[60%] bg-gray-800 rounded-3xl p-8 shadow-2xl relative border border-blue-200/10"
-    >
-      <div class="text-4xl font-bold text-center text-blue-200 mb-6">
-        <i class="fa-duotone fa-atm text-blue-200 mr-2"></i>{$Locales.atm}
-      </div>
-      <div class="grid grid-cols-2 gap-6 mb-8">
-        <div
-          class="bg-gray-700 p-6 rounded-2xl shadow-lg flex flex-col items-center justify-center"
-        >
-          <div class="text-2xl font-semibold text-blue-100 mb-2">
-            <i class="fa-duotone fa-money-bill-wave text-md mr-2"></i>
-            {$Locales.cash}
+<svelte:window on:keydown={handleKeydown}/>
+
+{#if $showATM}
+  <div class="fixed inset-0  z-50">
+    <div class="absolute w-screen h-screen flex items-center justify-center">
+      <div
+        class="w-[650px] modern-card overflow-hidden"
+        in:fade={{ duration: 200 }}
+        out:fade={{ duration: 150 }}
+      >
+        <!-- Header -->
+        <div class="p-4 border-b border-white/10 flex items-center justify-between">
+          <div class="flex items-center space-x-3">
+            <div class="w-10 h-10 bg-indigo-500 rounded-xl flex items-center justify-center">
+              <i class="fas fa-credit-card text-white text-lg"></i>
+            </div>
+            <div>
+                    <h1 class="text-lg font-semibold text-white">{$Locales.atm}</h1>
+      <p class="text-sm text-white/50">{$Locales.quick_management}</p>
+            </div>
           </div>
-          <div class="text-4xl font-bold text-blue-400">
-            {$currentCash.toLocaleString($Currency.lang, {
-              style: "currency",
-              currency: $Currency.currency,
-              minimumFractionDigits: 0,
-            })}
-          </div>
-        </div>
-        <div
-          class="bg-gray-700 p-6 rounded-2xl shadow-lg flex flex-col items-center justify-center"
-        >
-          <div class="text-2xl font-semibold text-blue-100 mb-2">
-            <i class="fa-duotone fa-vault text-md mr-2"
-            ></i>{$Locales.bank_balance}
-          </div>
-          <div class="text-4xl font-bold text-blue-400">
-            {$bankBalance.toLocaleString($Currency.lang, {
-              style: "currency",
-              currency: $Currency.currency,
-              minimumFractionDigits: 0,
-            })}
-          </div>
-        </div>
-      </div>
-      <div class="grid" style={`grid-template-columns: repeat(${$gridColsPreset}, minmax(0, 1fr)); gap: 10px;`}>
-        {#each $withdrawAmounts as amount}
           <button
-            class="bg-blue-600/10 border border-blue-500 hover:bg-blue-800/50 text-white font-bold py-4 px-6 rounded-xl duration-500 cursor-pointer flex items-center justify-center gap-2"
-            on:click={() => {
-              heav(amount);
-            }}
+            class="w-8 h-8 flex items-center justify-center rounded-lg bg-white/5 hover:bg-white/10 transition-colors text-white/50 hover:text-white/80"
+            on:click={closeATM}
           >
-            <i class="fa-duotone fa-money-bill-wave text-lg"
-            ></i>{$Locales.withdraw}
-            {amount.toLocaleString($Currency.lang, {
-              style: "currency",
-              currency: $Currency.currency,
-              minimumFractionDigits: 0,
-            })}
-          </button>
-        {/each}
-        {#each $depositAmounts as amount}
-          <button
-            class="bg-green-600/10 border border-green-500 hover:bg-green-800/50 text-white font-bold py-4 px-6 rounded-xl duration-500 cursor-pointer flex items-center justify-center gap-2"
-            on:click={() => {
-              deposit(amount);
-            }}
-          >
-            <i class="fa-duotone fa-credit-card text-lg"></i>{$Locales.deposit}
-            {amount.toLocaleString($Currency.lang, {
-              style: "currency",
-              currency: $Currency.currency,
-              minimumFractionDigits: 0,
-            })}
-          </button>
-        {/each}
-      </div>
-      <div class="grid grid-cols-2 gap-4 mt-4">
-        <div class="bg-gray-700 p-4 rounded-xl shadow-lg">
-          <div class="flex items-center mb-2">
-            <i
-              class="fa-duotone fa-money-check-edit text-xl text-green-400 mr-2"
-            ></i>
-            <label for="Deposit" class="text-lg font-semibold text-white">
-              {$Locales.deposit_amount}
-            </label>
-          </div>
-          <input
-            type="number"
-            id="Deposit"
-            bind:value={$customDeposit}
-            class="w-full bg-gray-800 text-white font-bold pl-4 pr-4 py-3 rounded-lg border border-green-200/10 focus:outline-none focus:border-green-400/50 transition-colors duration-500 placeholder-gray-500"
-            placeholder={$Locales.deposit_amount}
-          />
-          <button
-            class="mt-2 w-full bg-green-600/10 border border-green-500 hover:bg-green-800/50 text-white font-bold py-2 px-4 rounded-xl duration-500 cursor-pointer flex items-center justify-center gap-2"
-            on:click={() => {
-              deposit(get(customDeposit));
-            }}
-          >
-            <i class="fa-duotone fa-piggy-bank text-lg"></i>
-            {$Locales.submit}
+            <i class="fas fa-times text-lg"></i>
           </button>
         </div>
-        <div class="bg-gray-700 p-4 rounded-xl shadow-lg">
-          <div class="flex items-center mb-2">
-            <i class="fa-duotone fa-money-check-edit text-xl text-blue-400 mr-2"
-            ></i>
-            <label for="Withdraw" class="text-lg font-semibold text-white">
-              {$Locales.withdraw_amount}
-            </label>
+
+        <div class="p-4 space-y-4">
+          <!-- Balance Cards -->
+          <div class="grid grid-cols-2 gap-4">
+            <div class="bg-black/20 border border-white/10 rounded-lg p-4">
+              <div class="flex items-center space-x-2 mb-1">
+                <i class="fas fa-wallet text-green-400 text-lg"></i>
+                <span class="text-white/80">{$Locales.cash}</span>
+              </div>
+              <p class="text-xl font-bold text-white">
+                R$ {$currentCash.toLocaleString()}
+              </p>
+            </div>
+
+            <div class="bg-black/20 border border-white/10 rounded-lg p-4">
+              <div class="flex items-center space-x-2 mb-1">
+                <i class="fas fa-university text-blue-400 text-lg"></i>
+                <span class="text-white/80">{$Locales.bank_balance}</span>
+              </div>
+              <p class="text-xl font-bold text-white">
+                R$ {$bankBalance.toLocaleString()}
+              </p>
+            </div>
           </div>
-          <input
-            type="number"
-            id="Withdraw"
-            bind:value={$customWithdraw}
-            class="w-full bg-gray-800 font-bold text-white pl-4 pr-4 py-3 rounded-lg border border-blue-200/10 focus:outline-none focus:border-blue-400/50 transition-colors duration-500 placeholder-gray-500"
-            placeholder={$Locales.withdraw_amount}
-          />
-          <button
-            class="mt-2 w-full bg-blue-600/10 border border-blue-500 hover:bg-blue-800/50 text-white font-bold py-2 px-4 rounded-xl duration-500 cursor-pointer flex items-center justify-center gap-2"
-            on:click={() => {
-              heav(get(customWithdraw));
-            }}
-          >
-            <i class="fa-duotone fa-money-bill-wave text-lg"></i>
-            {$Locales.submit}
-          </button>
+
+          <!-- Quick Actions -->
+          <div class="grid grid-cols-3 gap-2">
+            {#each $withdrawAmounts as amount}
+              <button
+                class="bg-black/20 border border-white/10 hover:bg-white/5 transition-colors rounded-lg p-3 text-center group relative overflow-hidden"
+                on:click={() => heav(amount)}
+              >
+                <div class="absolute inset-0 bg-red-500/10 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                <i class="fas fa-arrow-down text-red-400 mr-2"></i>
+                <span class="text-white/80">R$ {amount.toLocaleString()}</span>
+              </button>
+            {/each}
+          </div>
+
+          <div class="grid grid-cols-3 gap-2">
+            {#each $depositAmounts as amount}
+              <button
+                class="bg-black/20 border border-white/10 hover:bg-white/5 transition-colors rounded-lg p-3 text-center group relative overflow-hidden"
+                on:click={() => deposit(amount)}
+              >
+                <div class="absolute inset-0 bg-green-500/10 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                <i class="fas fa-arrow-up text-green-400 mr-2"></i>
+                <span class="text-white/80">R$ {amount.toLocaleString()}</span>
+              </button>
+            {/each}
+          </div>
+
+          <!-- Custom Amount Inputs -->
+          <div class="grid grid-cols-2 gap-4">
+            <div class="bg-black/20 border border-white/10 rounded-lg p-4">
+              <div class="flex items-center space-x-2 mb-2">
+                <i class="fas fa-arrow-down text-red-400"></i>
+                <span class="text-white/80">{$Locales.withdraw_amount}</span>
+              </div>
+              <div class="flex space-x-2">
+                <input
+                  type="number"
+                  bind:value={$customWithdraw}
+                  class="w-full bg-black/30 text-white px-3 py-2 rounded-lg border border-white/10 focus:outline-none focus:border-white/20 focus:ring-1 focus:ring-red-500/20"
+                  placeholder={$Locales.enter_amount}
+                  min="0"
+                  max={$bankBalance}
+                />
+                <button
+                  class="px-6 py-2 bg-red-500/20 hover:bg-red-500/30 transition-colors rounded-lg text-white relative overflow-hidden group flex items-center justify-center text-center min-w-[100px]"
+                  on:click={() => heav($customWithdraw)}
+                  disabled={$customWithdraw <= 0 || $customWithdraw > $bankBalance}
+                >
+                  <div class="absolute inset-0 bg-red-500/10 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                  {$Locales.submit}
+                </button>
+              </div>
+            </div>
+
+            <div class="bg-black/20 border border-white/10 rounded-lg p-4">
+              <div class="flex items-center space-x-2 mb-2">
+                <i class="fas fa-arrow-up text-green-400"></i>
+                <span class="text-white/80">{$Locales.deposit_amount}</span>
+              </div>
+              <div class="flex space-x-2">
+                <input
+                  type="number"
+                  bind:value={$customDeposit}
+                  class="w-full bg-black/30 text-white px-3 py-2 rounded-lg border border-white/10 focus:outline-none focus:border-white/20 focus:ring-1 focus:ring-green-500/20"
+                  placeholder={$Locales.enter_amount}
+                  min="0"
+                  max={$currentCash}
+                />
+                <button
+                  class="px-6 py-2 bg-green-500/20 hover:bg-green-500/30 transition-colors rounded-lg text-white relative overflow-hidden group flex items-center justify-center text-center min-w-[100px]"
+                  on:click={() => deposit($customDeposit)}
+                  disabled={$customDeposit <= 0 || $customDeposit > $currentCash}
+                >
+                  <div class="absolute inset-0 bg-green-500/10 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                  {$Locales.submit}
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
-      </div>
-      <div class="absolute top-4 right-4 transform -translate-x-1/2 text-white">
-        <button
-          class="text-blue-200/50 hover:text-blue-500/50 font-bold py-2 px-4 rounded-xl duration-500 cursor-pointer flex items-center justify-center gap-2 text-gray-300 py-4 transition-all duration-500 rounded-xl hover:text-blue-300 duration-500 hover:cursor-pointer hover:bg-gray-800/80"
-          on:click={() => {
-            showATM.set(false);
-            fetchNui("ps-banking:client:hideUI");
-          }}
-        >
-          <i class="fa-duotone fa-times-circle text-2xl"></i>
-        </button>
       </div>
     </div>
   </div>
-</div>
+{/if}

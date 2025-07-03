@@ -1,10 +1,11 @@
+
 CREATE TABLE
     `ps_banking_transactions` (
         `id` INT NOT NULL AUTO_INCREMENT,
         `identifier` VARCHAR(50) NOT NULL,
         `description` VARCHAR(255) NOT NULL,
         `type` VARCHAR(50) NOT NULL,
-        `amount` DECIMAL(10, 2) NOT NULL,
+        `amount` DECIMAL(20, 2) NOT NULL,
         `date` DATE NOT NULL,
         `isIncome` BOOLEAN NOT NULL,
         PRIMARY KEY (`id`)
@@ -16,7 +17,7 @@ CREATE TABLE
         `identifier` VARCHAR(50) NOT NULL,
         `description` VARCHAR(255) NOT NULL,
         `type` VARCHAR(50) NOT NULL,
-        `amount` DECIMAL(10, 2) NOT NULL,
+        `amount` DECIMAL(20, 2) NOT NULL,
         `date` DATE NOT NULL,
         `isPaid` BOOLEAN NOT NULL,
         PRIMARY KEY (`id`)
@@ -33,8 +34,8 @@ CREATE TABLE
         PRIMARY KEY (`id`)
     ) ENGINE = InnoDB;
 
+  
     
-
 /* Dummy data (Ignore)
 INSERT INTO `ps_banking_bills` (`identifier`, `description`, `type`, `amount`, `date`, `isPaid`) VALUES
 ('char1:df6c12c50e2712c57b1386e7103d5a372fb960a0', 'Utility Bill', 'Expense', 150.00, '2024-07-20', 0);

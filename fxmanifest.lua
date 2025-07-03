@@ -2,7 +2,7 @@ fx_version 'cerulean'
 game 'gta5'
 
 name 'ps-banking'
-author 'Project Sloth'
+author 'Project Sloth, redesign by: Rafaell#0202'
 version '1.0.4'
 
 ui_page 'html/index.html'

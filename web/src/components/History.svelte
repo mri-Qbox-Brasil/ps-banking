@@ -17,7 +17,6 @@
     type Notification,
   } from "../store/data";
 
-  // Sample data
   let transactions = Transactions;
   let searchQuery = writable("");
   let showDeleteAllModal = writable(false);
@@ -70,135 +69,145 @@
   });
 </script>
 
-<div class="absolute w-full h-full bg-gray-800">
-  <div
-    class="absolute w-[90%] h-full p-6 overflow-auto left-[130px] text-blue-200"
-    in:slide={{ duration: 1000, easing: quintOut }}
-  >
-    <div
-      class="bg-gray-800/50 p-8 rounded-lg shadow-lg border border-blue-200/5"
-    >
-      <div class="flex items-center mb-4">
-        <i class="fa-duotone fa-list text-2xl text-blue-400 mr-3"></i>
-        <h2 class="text-2xl font-bold">{$Locales.history}</h2>
-      </div>
-      <div class="flex justify-between items-center mb-4">
-        <div class="flex items-center">
-          <i class="fa-duotone fa-wallet text-xl text-gray-400 mr-2"></i>
-          <span class="text-gray-400">{$Locales.total}</span>
+<div class="h-full flex flex-col p-8 overflow-y-auto">
+  <!-- Page Header -->
+  <div class="flex items-center justify-between mb-8">
+    <div>
+      <h1 class="text-3xl font-bold text-white mb-2">{$Locales.history}</h1>
+      <p class="text-white/60">{$Locales.view_complete_transaction_history}</p>
+    </div>
+    <div class="flex items-center space-x-4">
+      <div class="modern-card px-4 py-2">
+        <div class="flex items-center space-x-2">
+          <i class="fas fa-receipt text-blue-400"></i>
+          <span class="text-sm text-white/80">{filteredTransactions.length} {$Locales.transactions_count}</span>
         </div>
-        <div class="absolute right-16 top-10">
-          <i class="fa-duotone fa-receipt text-xl text-gray-400 mr-2"></i>
-          <span class="text-xl text-white font-semibold">
-            {filteredTransactions.length}
-          </span>
-        </div>
-        <button
-          class="bg-gray-700/50 text-blue-200 py-2 px-4 rounded-lg flex items-center hover:bg-gray-500/50 transition duration-500 border border-gray-500/20"
-          on:click={confirmDeleteAllTransactions}
-        >
-          <i class="fa-duotone fa-trash-alt mr-2"
-          ></i>{$Locales.delete_all_transactions}
-        </button>
       </div>
-      <div class="relative mb-6">
-        <i class="fa-duotone fa-search absolute left-4 top-4 text-gray-400"></i>
+      <button
+        class="action-button flex items-center space-x-2 bg-red-500/10 border-red-500/30 hover:bg-red-500/20"
+        on:click={confirmDeleteAllTransactions}
+      >
+        <i class="fas fa-trash-alt text-red-400"></i>
+        <span class="text-red-400">{$Locales.delete_all_transactions}</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Search Bar -->
+  <div class="mb-8">
+    <div class="modern-card p-4">
+      <div class="relative">
+        <i class="fas fa-search absolute left-4 top-1/2 transform -translate-y-1/2 text-white/40"></i>
         <input
           type="text"
-          class="w-full rounded bg-gray-700/50 text-white pl-10 pr-4 py-3 border border-blue-200/10 rounded-lg focus:outline-none
-              focus:border-blue-400/50 transition-colors duration-500"
-          placeholder={$Locales.search_transactions}
+          class="w-full bg-transparent text-white pl-12 pr-4 py-3 focus:outline-none placeholder-white/40"
+          placeholder="{$Locales.search_transactions}"
           bind:value={$searchQuery}
         />
       </div>
-      <div class="space-y-4">
-        {#each filteredTransactions as transaction (transaction.id)}
-          <div
-            class="bg-[#334155] p-4 rounded-lg shadow-md transition duration-300 border border-blue-200/5"
-            out:slide={{ duration: 500 }}
-          >
-            <div class="flex justify-between items-center">
-              <div class="flex items-center">
-                <i
-                  class={`fa-duotone ${transaction.isIncome ? "fa-arrow-down-to-arc" : "fa-arrow-up-from-arc"} text-xl mr-3 ${transaction.isIncome ? "text-green-400" : "text-red-400"}`}
-                ></i>
-                <div>
-                  <div class="flex items-center">
-                    <i
-                      class="fa-duotone fa-file-invoice text-lg text-gray-300 mr-2"
-                    ></i>
-                    <p class="text-lg font-bold">
-                      {transaction.description} #{transaction.id}
-                    </p>
-                  </div>
-                  <div class="flex items-center">
-                    <i
-                      class="fa-duotone fa-exchange-alt text-sm text-gray-400 mr-2"
-                    ></i>
-                    <p class="text-sm text-gray-400">{transaction.type}</p>
-                  </div>
-                  <div class="flex items-center">
-                    <i class="fa-duotone fa-clock text-xs text-gray-500 mr-2"
-                    ></i>
-                    <p class="text-xs text-gray-500">
-                      {formatDate(transaction.date)}
-                    </p>
-                  </div>
-                </div>
+    </div>
+  </div>
+
+  <!-- Transactions List -->
+  <div class="grid gap-4">
+    {#if filteredTransactions.length > 0}
+      {#each filteredTransactions as transaction (transaction.id)}
+        <div
+          class="modern-card modern-card-hover p-6"
+          in:fade={{ duration: 300 }}
+          out:slide={{ duration: 300 }}
+        >
+          <div class="flex items-center justify-between">
+            <div class="flex items-center space-x-4 flex-1">
+              <div class={`w-12 h-12 rounded-xl flex items-center justify-center ${
+                transaction.isIncome 
+                  ? 'bg-green-500/20' 
+                  : 'bg-red-500/20'
+              }`}>
+                <i class={`fas ${
+                  transaction.isIncome 
+                    ? 'fa-arrow-down text-green-400' 
+                    : 'fa-arrow-up text-red-400'
+                } text-lg`}></i>
               </div>
-              <div class="text-right">
-                <div class="flex items-center">
-                  <i class="fa-duotone fa-coins text-lg text-gray-400 mr-2"></i>
-                  <p
-                    class={`text-lg font-bold ${transaction.isIncome ? "text-green-500" : "text-red-500"}`}
-                  >
-                    {transaction.isIncome ? "+" : "-"}
-                    {transaction.amount.toLocaleString($Currency.lang, {
-                      style: "currency",
-                      currency: $Currency.currency,
-                      minimumFractionDigits: 0,
-                    })}
-                  </p>
+              
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center space-x-2 mb-1">
+                  <h3 class="text-white font-semibold truncate">{transaction.description}</h3>
+                  <span class="text-white/50 text-sm">#{transaction.id}</span>
+                </div>
+                <div class="flex items-center space-x-4 text-sm text-white/60">
+                  <span>{transaction.type}</span>
+                  <span>{formatDate(transaction.date)}</span>
                 </div>
               </div>
             </div>
+
+            <div class="text-right">
+              <span class={`text-lg font-bold ${transaction.isIncome ? "text-green-400" : "text-red-400"}`}>
+                {transaction.isIncome ? "+" : "-"}
+                {#if transaction.amount >= 1000000}
+                  R$ {(transaction.amount / 1000000).toFixed(1)}M
+                {:else if transaction.amount >= 1000}
+                  R$ {(transaction.amount / 1000).toFixed(1)}K
+                {:else}
+                  R$ {transaction.amount.toLocaleString()}
+                {/if}
+              </span>
+              <div class="text-xs text-white/50 mt-1">
+                {transaction.isIncome ? $Locales.received : $Locales.sent}
+              </div>
+            </div>
           </div>
-        {/each}
+        </div>
+      {/each}
+    {:else}
+      <div class="modern-card p-12 text-center">
+        <i class="fas fa-history text-white/30 text-5xl mb-4"></i>
+        <h3 class="text-xl font-semibold text-white mb-2">{$Locales.no_transactions_found}</h3>
+        <p class="text-white/60">
+          {$searchQuery ? $Locales.no_transactions_match_search : $Locales.transaction_history_empty}
+        </p>
       </div>
-    </div>
+    {/if}
   </div>
 </div>
+
+<!-- Delete Confirmation Modal -->
 {#if $showDeleteAllModal}
-  <div
-    class="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50"
-  >
+  <div class="modal-backdrop fixed inset-0 flex items-center justify-center z-50">
     <div
-      class="bg-gray-700 p-8 rounded-lg shadow-lg w-96"
-      in:scale={{ duration: 250, easing: quintOut }}
+      class="modern-card p-8 w-full max-w-md mx-4"
+      in:scale={{ duration: 300, easing: quintOut }}
       out:scale={{ duration: 250, easing: quintOut }}
     >
-      <div class="flex items-center mb-4">
-        <i class="fa-duotone fa-question-circle text-3xl text-blue-400 mr-3"
-        ></i>
-        <h2 class="text-2xl text-blue-200 font-bold">
-          {$Locales.are_you_sure}
-        </h2>
+      <div class="flex items-center justify-between mb-6">
+        <div class="flex items-center space-x-3">
+          <div class="w-12 h-12 bg-red-500/20 rounded-xl flex items-center justify-center">
+            <i class="fas fa-exclamation-triangle text-red-400 text-xl"></i>
+          </div>
+          <h2 class="text-2xl font-bold text-white">{$Locales.are_you_sure}</h2>
+        </div>
       </div>
-      <p class="text-gray-300 mb-6">
+
+      <p class="text-white/70 mb-6">
         {$Locales.delete_confirmation}
       </p>
-      <div class="flex justify-between items-center">
+
+      <div class="flex space-x-4">
         <button
-          class="flex items-center bg-red-600 hover:bg-red-700 text-white py-2 px-4 rounded focus:outline-none"
+          class="flex-1 px-4 py-3 bg-white/10 rounded-xl text-white hover:bg-white/20 transition-colors"
           on:click={() => showDeleteAllModal.set(false)}
         >
-          <i class="fa-duotone fa-times-circle mr-2"></i>{$Locales.cancel}
+          <i class="fas fa-times mr-2"></i>
+          {$Locales.cancel}
         </button>
         <button
-          class="flex items-center bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded focus:outline-none"
+          class="flex-1 px-4 py-3 bg-red-500/20 border border-red-500/30 rounded-xl text-red-400 hover:bg-red-500/30 transition-colors"
           on:click={deleteAllTransactions}
         >
-          <i class="fa-duotone fa-check-circle mr-2"></i>{$Locales.confirm}
+          <i class="fas fa-trash mr-2"></i>
+          {$Locales.delete_all}
         </button>
       </div>
     </div>

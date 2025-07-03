@@ -66,88 +66,104 @@
   });
 </script>
 
-<div class="absolute w-full h-full bg-gray-800 text-white">
-  <div
-    class="absolute w-[90%] h-full p-6 overflow-auto left-[130px]"
-    in:slide={{ duration: 1000, easing: quintOut }}
-  >
-    <div
-      class="bg-gray-800/50 p-8 rounded-lg shadow-lg border border-blue-200/5"
-    >
-      <div class="flex justify-between items-center mb-6">
-        <div class="flex items-center">
-          <i class="fa-duotone fa-list text-3xl text-blue-200 mr-3"></i>
-          <h2 class="text-3xl font-bold text-blue-200">{$Locales.bills}</h2>
-        </div>
-        <div class="bg-[#334155] rounded-full px-3 py-1 flex items-center">
-          <i class="fa-duotone fa-file-invoice-dollar text-gray-400 mr-2"></i>
-          <span class="text-sm text-gray-400 mr-2">{$Locales.total}</span>
-          <span class="text-lg font-semibold text-white">
-            {$transactions.length}
-          </span>
+<div class="h-full flex flex-col p-8 overflow-y-auto">
+  <!-- Page Header -->
+  <div class="flex items-center justify-between mb-8">
+    <div>
+      <h1 class="text-3xl font-bold text-white mb-2">{$Locales.bills}</h1>
+      <p class="text-white/60">{$Locales.manage_pending_bills_payments}</p>
+    </div>
+    <div class="flex items-center space-x-4">
+      <div class="modern-card px-4 py-2">
+        <div class="flex items-center space-x-2">
+          <i class="fas fa-file-invoice text-yellow-400"></i>
+          <span class="text-sm text-white/80">{$transactions.length} {$Locales.bills_count}</span>
         </div>
       </div>
-      <div class="relative mb-6">
-        <i class="fa-duotone fa-search absolute left-4 top-4 text-gray-400"></i>
+    </div>
+  </div>
+
+  <!-- Search Bar -->
+  <div class="mb-8">
+    <div class="modern-card p-4">
+      <div class="relative">
+        <i class="fas fa-search absolute left-4 top-1/2 transform -translate-y-1/2 text-white/40"></i>
         <input
           type="text"
-          class="w-full bg-gray-800 text-white pl-10 pr-4 py-3 rounded-lg border border-blue-200/10 focus:outline-none focus:border-blue-400/50 transition-colors duration-500 placeholder-gray-500"
-          placeholder={$Locales.search_transactions}
+          class="w-full bg-transparent text-white pl-12 pr-4 py-3 focus:outline-none placeholder-white/40"
+          placeholder="{$Locales.search_transactions}"
           bind:value={$searchQuery}
         />
       </div>
-      <div class="space-y-6">
-        {#each filteredTransactions as transaction (transaction.id)}
-          <div
-            class="p-4 bg-[#334155] rounded-lg flex justify-between items-center"
-            out:slide={{ duration: 1000, easing: quintOut }}
-          >
-            <div class="flex flex-col space-y-1">
-              <div class="flex items-center space-x-2">
-                <i class="fa-duotone fa-file-invoice text-2xl text-[#f1f5f9]"
-                ></i>
-                <span class="font-semibold text-[#f1f5f9]"
-                  >{transaction.description} #{transaction.id}</span
-                >
+    </div>
+  </div>
+
+  <!-- Bills Grid -->
+  <div class="grid gap-4">
+    {#if filteredTransactions.length > 0}
+      {#each filteredTransactions as transaction (transaction.id)}
+        <div
+          class="modern-card modern-card-hover p-6"
+          in:fade={{ duration: 300 }}
+          out:slide={{ duration: 300 }}
+        >
+          <div class="flex items-center justify-between">
+            <div class="flex items-center space-x-4 flex-1">
+              <div class="w-12 h-12 bg-orange-500/20 rounded-xl flex items-center justify-center">
+                <i class="fas fa-file-invoice text-orange-400 text-lg"></i>
               </div>
-              <div class="flex items-center space-x-2">
-                <i class="fa-duotone fa-user text-sm text-gray-400"></i>
-                <span class="text-sm text-gray-400">{transaction.type}</span>
-              </div>
-              <div class="flex items-center space-x-2">
-                <i class="fa-duotone fa-clock text-xs text-gray-500"></i>
-                <span class="text-xs text-gray-500"
-                  >{formatDate(transaction.date)}</span
-                >
+              
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center space-x-2 mb-1">
+                  <h3 class="text-white font-semibold truncate">{transaction.description}</h3>
+                  <span class="text-white/50 text-sm">#{transaction.id}</span>
+                </div>
+                <div class="flex items-center space-x-4 text-sm text-white/60">
+                  <span>{transaction.type}</span>
+                  <span>{formatDate(transaction.date)}</span>
+                </div>
               </div>
             </div>
-            <div class="text-right flex flex-col items-end space-y-1">
-              <span
-                class={`text-lg font-bold ${transaction.isIncome ? "text-green-500" : "text-red-500"}`}
-              >
-                <i class="fa-duotone fa-coins text-lg text-gray-400 mr-2"></i>
-                {transaction.isIncome ? "+" : "-"}
-                {transaction.amount.toLocaleString($Currency.lang, {
-                  style: "currency",
-                  currency: $Currency.currency,
-                  minimumFractionDigits: 0,
-                })}
-              </span>
+
+            <div class="flex items-center space-x-4">
+              <div class="text-right">
+                <span class={`text-lg font-bold ${transaction.isIncome ? "text-green-400" : "text-red-400"}`}>
+                  {transaction.isIncome ? "+" : "-"}
+                                  {#if transaction.amount >= 1000000}
+                  R$ {(transaction.amount / 1000000).toFixed(1)}M
+                {:else if transaction.amount >= 1000}
+                  R$ {(transaction.amount / 1000).toFixed(1)}K
+                {:else}
+                  R$ {transaction.amount.toLocaleString()}
+                {/if}
+                </span>
+              </div>
+
               {#if !transaction.isPaid}
                 <button
-                  class="bg-blue-600/10 border border-blue-500 hover:bg-blue-800/50 text-white font-bold py-2 px-4 rounded-lg flex items-center transition-colors duration-300"
-                  on:click={() => {
-                    payBill(transaction);
-                  }}
+                  class="action-button flex items-center space-x-2"
+                  on:click={() => payBill(transaction)}
                 >
-                  <i class="fa-duotone fa-money-check-edit text-lg mr-2"></i>
-                  {$Locales.pay_invoice}
+                  <i class="fas fa-credit-card"></i>
+                  <span>{$Locales.pay_invoice}</span>
                 </button>
+              {:else}
+                <div class="px-4 py-2 bg-green-500/20 rounded-lg border border-green-500/30">
+                  <span class="text-green-400 text-sm font-medium">{$Locales.paid}</span>
+                </div>
               {/if}
             </div>
           </div>
-        {/each}
+        </div>
+      {/each}
+    {:else}
+      <div class="modern-card p-12 text-center">
+        <i class="fas fa-file-invoice text-white/30 text-5xl mb-4"></i>
+        <h3 class="text-xl font-semibold text-white mb-2">{$Locales.no_bills_found}</h3>
+        <p class="text-white/60">
+          {$searchQuery ? $Locales.no_bills_match_search : $Locales.no_pending_bills_moment}
+        </p>
       </div>
-    </div>
+    {/if}
   </div>
 </div>

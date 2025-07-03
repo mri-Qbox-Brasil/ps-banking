@@ -4,8 +4,8 @@ Config.LBPhone = false -- Does your server use lb-phone?
 Config.TargetSystem = "ox_target" -- Change to your target script like ox_target, qb-target, Or use devyn's interact.
 
 Config.Currency = {
-    lang = "pt-br", -- da-DK
-    currency = "USD", -- DKK
+    lang = "pt-br", -- en-US
+    currency = "BRL", -- USD
 }
 
 Config.BankLocations = {

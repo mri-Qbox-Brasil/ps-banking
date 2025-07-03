@@ -1,12 +1,11 @@
 lib.locale()
 Config = {}
-Config.Debug = false
 Config.LBPhone = false -- Does your server use lb-phone?
 Config.TargetSystem = "ox_target" -- Change to your target script like ox_target, qb-target, Or use devyn's interact.
 
 Config.Currency = {
     lang = "pt-br", -- da-DK
-    currency = "BRL", -- DKK
+    currency = "USD", -- DKK
 }
 
 Config.BankLocations = {

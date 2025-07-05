@@ -147,6 +147,7 @@ Citizen.CreateThread(function()
                 icon = "fas fa-solid fa-money-bills",
                 label = locale("openATM"),
                 event = "ps-banking:client:open:atm",
+                offset = vec3(0.5, 0.0, 0.5),
                 canInteract = function(_, distance)
                     return distance < 2.5
                 end,

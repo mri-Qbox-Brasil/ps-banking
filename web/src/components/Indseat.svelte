@@ -12,7 +12,7 @@
   } from "../store/data";
 
   let depositAmount = writable(0);
-  $: newBank = $bankBalance + $depositAmount;
+  $: newBank = (Number($bankBalance) || 0) + (Number($depositAmount) || 0);
 
   async function updateBalances() {
     try {

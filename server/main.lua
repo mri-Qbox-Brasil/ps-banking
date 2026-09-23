@@ -172,6 +172,18 @@ end
 exports("GetAccountBalance", getAccountBalance)
 exportHandler("GetAccountBalance", getAccountBalance)
 
+-- Compatibilidade com Renewed-Banking (junto com o provides do fxmanifest): usado pelo
+-- qbx_core (salário via conta da empresa), qbx_vehicleshop e jim_bridge
+local function renewedExportHandler(exportName, func)
+    AddEventHandler(('__cfx_export_Renewed-Banking_%s'):format(exportName), function(setCB)
+        setCB(func)
+    end)
+end
+
+renewedExportHandler("getAccountMoney", getAccountBalance)
+renewedExportHandler("addAccountMoney", addMoney)
+renewedExportHandler("removeAccountMoney", removeMoney)
+
 local function createBankStatement(playerId, account, amount, reason, statementType, accountType)
 	local xPlayer = getPlayerFromId(playerId)
 	if not xPlayer then
